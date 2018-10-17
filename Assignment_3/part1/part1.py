@@ -120,7 +120,7 @@ for num_input in range(min_length,max_length+1):
 	plt.plot(epoch_num, val_loss, 'b-', linewidth=2, label='loss of test set')
 	plt.xlabel('epoch')
 	plt.ylabel('loss', fontsize=15)
-	plt.title('Decrease of Loss')
+	plt.title('Decrease of Loss, Multilayer Perceptron')
 	plt.legend()
 	plt.grid()
 	plt.savefig(directory + 'fc_model_weights_length_'+str(length)+'.png')
@@ -131,8 +131,8 @@ for num_input in range(min_length,max_length+1):
 	# fc_model_weights_length_1.h5
 	##### SAVE MODEL WEIGHTS #####
 
-	filename = \
-		'/Users/xiaogouman/Documents/masters/CS5242/Assignments/Assignment_3/results/part1/fc_model_weights_length_'\
+	filename = directory+\
+		'fc_model_weights_length_'\
 		+str(length)
 	model_fc.save_weights(filename)
 
@@ -165,7 +165,7 @@ plt.xlabel('length of input sequences')
 plt.ylabel('rmse')
 plt.legend()
 plt.grid()
-plt.savefig(directory + 'rmse_length'+str(length)+'.png')
+plt.savefig('fc_model_rmse_length_'+str(max_length)+'.png')
 plt.show()
 plt.close()
 

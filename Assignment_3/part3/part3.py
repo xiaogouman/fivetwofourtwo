@@ -2,12 +2,18 @@ from __future__ import print_function
 import numpy as np
 import matplotlib.pyplot as plt
 import pandas as pd
+import math
+import os
 from keras.models import Sequential
 from keras.layers import Dense, LSTM, SimpleRNN
 
 # Create model
-def create_lstm_model(stateful):
+def create_lstm_model(stateful, length):
 	##### YOUR MODEL GOES HERE #####
+	model = Sequential()
+	model.add(LSTM(units=20, activation='relu', stateful=stateful, batch_input_shape=(1, 1, length)))
+	model.add(Dense(1))
+	model.compile(optimizer='adam', loss='mean_squared_error')
 	return model
 
 # split train/test data
@@ -29,6 +35,10 @@ def split_data(x, y, ratio=0.8):
 
 	# some reshaping
 	##### RESHAPE YOUR DATA BASED ON YOUR MODEL #####
+	x_train = np.array(x_train)
+	x_test = np.array(x_test)
+	x_train = np.reshape(x_train, (x_train.shape[0], 1, x_train.shape[1]))
+	x_test = np.reshape(x_test, (x_test.shape[0], 1, x_test.shape[1]))
 
 	return (x_train, y_train), (x_test, y_test)
 
@@ -54,6 +64,11 @@ print('smooth_data first 5 data points:{}'.format(smooth_data[:5]))
 lstm_stateful_rmse_list=list()
 lstm_stateless_rmse_list=list()
 
+# result directory
+directory = '/Users/xiaogouman/Documents/masters/CS5242/Assignments/Assignment_3/results/part3/'
+if not os.path.exists(directory):
+	os.makedirs(directory)
+
 for num_input in range(min_length,max_length+1):
 	length = num_input
 
@@ -68,6 +83,10 @@ for num_input in range(min_length,max_length+1):
 	# when length > 1, arrange input sequences
 	if length > 1:
 		##### ARRANGE YOUR DATA SEQUENCES #####
+		temp_input = data_input
+		for i in range(1, length):
+			data_input = pd.concat([data_input, temp_input.shift(i)], axis=1)
+		data_input = data_input.fillna(0)
 
 
 	print('data_input length:{}'.format(len(data_input.index)) )
@@ -92,7 +111,11 @@ for num_input in range(min_length,max_length+1):
 	
 	# Create the stateful model
 	print('Creating Stateful LSTM Model...')
-	model_lstm_stateful = create_lstm_model(stateful=True)
+	model_lstm_stateful = create_lstm_model(stateful=True, length=length)
+
+	# cost of stateful model after each epoch
+	lstm_stateful_train_loss = []
+	lstm_stateful_test_loss = []
 
 	# Train the model
 	print('Training')
@@ -103,6 +126,12 @@ for num_input in range(min_length,max_length+1):
 		
 		##### TRAIN YOUR MODEL #####
 		# model_lstm_stateful.fit()
+		h = model_lstm_stateful.fit(x_train, y_train, epochs=1, batch_size=batch_size, verbose=2, shuffle=False,
+								   validation_data=(x_test, y_test))
+
+		loss, val_loss = h.history['loss'], h.history['val_loss']
+		lstm_stateful_train_loss.append(loss)
+		lstm_stateful_test_loss.append(val_loss)
 
 		# reset states at the end of each epoch
 		model_lstm_stateful.reset_states()
@@ -110,21 +139,34 @@ for num_input in range(min_length,max_length+1):
 
 	# Plot and save loss curves of training and test set vs iteration in the same graph
 	##### PLOT AND SAVE LOSS CURVES #####
+	epoch_num = np.linspace(1, epochs, num=epochs)
+	plt.figure(1)
+	plt.plot(epoch_num, lstm_stateful_train_loss, 'r-', linewidth=2, label='loss of train set')
+	plt.plot(epoch_num, lstm_stateful_test_loss, 'b-', linewidth=2, label='loss of test set')
+	plt.xlabel('epoch')
+	plt.ylabel('loss', fontsize=15)
+	plt.title('Decrease of Loss, LSTM, Stateful')
+	plt.legend()
+	plt.grid()
+	plt.savefig(directory + 'model_lstm_stateful_weights_length_' + str(length) + '.png')
+	plt.close()
 
 	# Save your model weights with following convention:
 	# For example length 1 input sequences model filename
 	# lstm_stateful_model_weights_length_1.h5
 	##### SAVE MODEL WEIGHTS #####
-	# filename = ''
-	# model_lstm_stateful.save_weights()
+	filename = directory + \
+			   'model_rnn_stateful_weights_length_' \
+			   + str(length)
+	model_lstm_stateful.save_weights(filename)
 
 	# Predict 
 	print('Predicting')
 	##### PREDICT #####
-	# predicted_lstm_stateful = model_lstm_stateful.predict()
+	predicted_lstm_stateful = model_lstm_stateful.predict(x_test, batch_size=batch_size)
 
 	##### CALCULATE RMSE #####
-	# lstm_stateful_rmse = 
+	lstm_stateful_rmse = math.sqrt(sum((predicted_lstm_stateful - y_test) ** 2) / len(y_test))
 	lstm_stateful_rmse_list.append(lstm_stateful_rmse)
 
 	# print('tsteps:{}'.format(tsteps))
@@ -135,31 +177,46 @@ for num_input in range(min_length,max_length+1):
 
 	# Create the stateless model
 	print('Creating stateless LSTM Model...')
-	model_lstm_stateless = create_lstm_model(stateful=False)
+	model_lstm_stateless = create_lstm_model(stateful=False, length=length)
 
 	# Train the model
 	print('Training')
 	##### TRAIN YOUR MODEL #####
-	# model_lstm_stateless.fit()
+	h = model_lstm_stateless.fit(x_train, y_train, epochs=epochs, batch_size=batch_size, verbose=2,
+								validation_data=(x_test, y_test), shuffle=False)
 
 
 	# Plot and save loss curves of training and test set vs iteration in the same graph
 	##### PLOT AND SAVE LOSS CURVES #####
+	loss, val_loss = h.history['loss'], h.history['val_loss']
+	epoch_num = np.linspace(1, epochs, num=epochs)
+	plt.figure(1)
+	plt.plot(epoch_num, loss, 'r-', linewidth=2, label='loss of train set')
+	plt.plot(epoch_num, val_loss, 'b-', linewidth=2, label='loss of test set')
+	plt.xlabel('epoch')
+	plt.ylabel('loss', fontsize=15)
+	plt.title('Decrease of Loss, LSTM, Stateless')
+	plt.legend()
+	plt.grid()
+	plt.savefig(directory + 'model_lstm_stateless_weights_length_' + str(length) + '.png')
+	plt.close()
 
 	# Save your model weights with following convention:
 	# For example length 1 input sequences model filename
 	# lstm_stateless_model_weights_length_1.h5
 	##### SAVE MODEL WEIGHTS #####
-	# filename = ''
-	# model_lstm_stateless.save_weights()
+	filename = directory + \
+			   'model_rnn_stateless_weights_length_' \
+			   + str(length)
+	model_lstm_stateless.save_weights(filename)
 
 	# Predict 
 	print('Predicting')
 	##### PREDICT #####
-	# predicted_lstm_stateless = model_lstm_stateless.predict()
+	predicted_lstm_stateless = model_lstm_stateless.predict(x_test)
 
 	##### CALCULATE RMSE #####
-	# lstm_stateless_rmse = 
+	lstm_stateless_rmse = math.sqrt(sum((predicted_lstm_stateless - y_test) ** 2) / len(y_test))
 	lstm_stateless_rmse_list.append(lstm_stateless_rmse)
 
 	# print('tsteps:{}'.format(tsteps))
@@ -184,6 +241,8 @@ plt.plot(data_input[0][:100], '.')
 plt.plot(expected_output[0][:100], '-')
 plt.legend(['Input', 'Expected output'])
 plt.title('Input - First 100 data points')
+plt.savefig('lstm_model_first_100.png')
+
 
 # Plot and save rmse vs Input Length
 plt.figure()
@@ -194,6 +253,7 @@ plt.xlabel('length of input sequences')
 plt.ylabel('rmse')
 plt.legend()
 plt.grid()
+plt.savefig('lstm_model_rmse_length_'+str(max_length)+'.png')
 plt.show()
 
 
